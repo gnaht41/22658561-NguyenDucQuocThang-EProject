@@ -2,11 +2,16 @@ name: CI/CD
 
 on:
   push:
-    branches: ["**"]
-  pull_request:
+    branches: ["**"]   # chạy cho mọi nhánh
+  pull_request:        # chạy PR để test
+
+concurrency:
+  group: cicd-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test-product:
+  # ===================== CI: Test product (có Mongo + RabbitMQ + Auth) =====================
+  test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -26,21 +31,23 @@ jobs:
           --health-interval=5s --health-timeout=3s --health-retries=30
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Use Node 20
+      - name: Use Node 20.x
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           cache: 'npm'
 
+      # Cài & chạy AUTH ở nền để test product có thể login lấy token
       - name: Install & start auth (background)
         working-directory: auth
         run: |
           npm ci --prefer-offline --no-audit --no-fund
           nohup npm start > ../auth.out 2>&1 &
 
-      - name: Wait for auth:3000
+      - name: Wait for auth:3000 ready
         run: npx --yes wait-on http://localhost:3000 --timeout 120000
 
       - name: Install product deps
@@ -51,6 +58,7 @@ jobs:
         working-directory: product
         env:
           CI: "true"
+          # chỉnh đúng tên biến theo app của bạn:
           MONGODB_URI: mongodb://localhost:27017/eproject_test
           RABBITMQ_URL: amqp://localhost:5672
           AUTH_BASE_URL: http://localhost:3000
@@ -60,51 +68,15 @@ jobs:
           npm test --silent -- \
             --runInBand --detectOpenHandles --forceExit
 
-      - name: Upload logs (always)
+      - name: Upload service logs (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: service-logs
           path: auth/auth.out
 
+  # ===================== CD: Build & Push Docker images lên Docker Hub =====================
   build-and-push:
-    needs: [test-product]
+    needs: test
+    # chỉ push khi ở nhánh main hoặc khi tag
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build & push auth
-        uses: docker/build-push-action@v6
-        with:
-          context: ./auth
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/eproject-auth:latest
-
-      - name: Build & push product
-        uses: docker/build-push-action@v6
-        with:
-          context: ./product
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/eproject-product:latest
-
-      - name: Build & push order
-        uses: docker/build-push-action@v6
-        with:
-          context: ./order
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/eproject-order:latest
-
-      - name: Build & push gateway
-        uses: docker/build-push-action@v6
-        with:
-          context: ./api-gateway
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/eproject-gateway:latest
