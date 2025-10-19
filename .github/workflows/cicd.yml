@@ -39,15 +39,31 @@ jobs:
           node-version: '20.x'
           cache: 'npm'
 
-      - name: Install & start auth (background)
+      # Đợi Mongo + RabbitMQ sẵn sàng trước khi chạy Auth
+      - name: Wait for Mongo & RabbitMQ
+        run: |
+          npx --yes wait-on tcp:localhost:27017 --timeout 120000
+          npx --yes wait-on http://localhost:15672 --timeout 120000
+
+      # Cài và chạy AUTH (nền) với ENV giả lập
+      - name: Install & start auth (background with env)
         working-directory: auth
+        env:
+          PORT: "3000"
+          MONGODB_URI: "mongodb://localhost:27017/eproject_auth"
+          RABBITMQ_URL: "amqp://localhost:5672"
+          JWT_SECRET: "testsecret"
         run: |
           npm ci --prefer-offline --no-audit --no-fund
-          nohup npm start > ../auth.out 2>&1 &
+          nohup npm start > $GITHUB_WORKSPACE/auth.out 2>&1 &
 
-      - name: Wait for auth:3000 ready
-        run: npx --yes wait-on http://localhost:3000 --timeout 120000
+      # Chờ cổng 3000; nếu lỗi thì in log
+      - name: Wait for auth:3000 ready (with logs on failure)
+        run: |
+          npx --yes wait-on http://localhost:3000 --timeout 120000 \
+          || { echo "---- AUTH LOGS ----"; tail -n 200 "$GITHUB_WORKSPACE/auth.out" || true; exit 1; }
 
+      # Cài dependency và chạy test Product
       - name: Install product deps
         working-directory: product
         run: npm ci --prefer-offline --no-audit --no-fund
@@ -70,7 +86,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: service-logs
-          path: auth/auth.out
+          path: ${{ github.workspace }}/auth.out
 
   build-and-push:
     needs: test
