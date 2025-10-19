@@ -39,31 +39,40 @@ jobs:
           node-version: '20.x'
           cache: 'npm'
 
-      # Đợi Mongo + RabbitMQ sẵn sàng trước khi chạy Auth
       - name: Wait for Mongo & RabbitMQ
         run: |
           npx --yes wait-on tcp:localhost:27017 --timeout 120000
           npx --yes wait-on http://localhost:15672 --timeout 120000
 
-      # Cài và chạy AUTH (nền) với ENV giả lập
-      - name: Install & start auth (background with env)
+      # ✅ Start AUTH with all common env aliases so your code finds the right one
+      - name: Install & start auth (background with env aliases)
         working-directory: auth
         env:
           PORT: "3000"
+          # Mongo aliases (choose whichever your code uses)
           MONGODB_URI: "mongodb://localhost:27017/eproject_auth"
-          RABBITMQ_URL: "amqp://localhost:5672"
+          MONGODB_URL: "mongodb://localhost:27017/eproject_auth"
+          MONGO_URI:    "mongodb://localhost:27017/eproject_auth"
+          MONGO_URL:    "mongodb://localhost:27017/eproject_auth"
+          DB_URI:       "mongodb://localhost:27017/eproject_auth"
+          DATABASE_URL: "mongodb://localhost:27017/eproject_auth"
+          # RabbitMQ aliases
+          RABBITMQ_URL:  "amqp://localhost:5672"
+          RABBIT_MQ_URL: "amqp://localhost:5672"
+          AMQP_URL:      "amqp://localhost:5672"
+          # JWT/secret (đổi nếu app yêu cầu tên khác)
           JWT_SECRET: "testsecret"
         run: |
           npm ci --prefer-offline --no-audit --no-fund
+          # In ra biến để debug nhanh nếu còn lỗi tên biến
+          node -e "console.log('ENV seen by AUTH:', {MONGODB_URI:process.env.MONGODB_URI, MONGO_URI:process.env.MONGO_URI, MONGODB_URL:process.env.MONGODB_URL, MONGO_URL:process.env.MONGO_URL, DB_URI:process.env.DB_URI, DATABASE_URL:process.env.DATABASE_URL, RABBITMQ_URL:process.env.RABBITMQ_URL, RABBIT_MQ_URL:process.env.RABBIT_MQ_URL, AMQP_URL:process.env.AMQP_URL});"
           nohup npm start > $GITHUB_WORKSPACE/auth.out 2>&1 &
 
-      # Chờ cổng 3000; nếu lỗi thì in log
       - name: Wait for auth:3000 ready (with logs on failure)
         run: |
           npx --yes wait-on http://localhost:3000 --timeout 120000 \
           || { echo "---- AUTH LOGS ----"; tail -n 200 "$GITHUB_WORKSPACE/auth.out" || true; exit 1; }
 
-      # Cài dependency và chạy test Product
       - name: Install product deps
         working-directory: product
         run: npm ci --prefer-offline --no-audit --no-fund
@@ -72,6 +81,7 @@ jobs:
         working-directory: product
         env:
           CI: "true"
+          # Product's own env (nếu product đọc tên khác, bạn đổi tương tự)
           MONGODB_URI: mongodb://localhost:27017/eproject_test
           RABBITMQ_URL: amqp://localhost:5672
           AUTH_BASE_URL: http://localhost:3000
@@ -104,7 +114,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # --- AUTH ---
       - name: Build & push auth
         uses: docker/build-push-action@v6
         with:
@@ -114,7 +123,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # --- PRODUCT ---
       - name: Build & push product
         uses: docker/build-push-action@v6
         with:
@@ -124,7 +132,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # --- ORDER ---
       - name: Build & push order
         uses: docker/build-push-action@v6
         with:
@@ -134,7 +141,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # --- GATEWAY ---
       - name: Build & push gateway
         uses: docker/build-push-action@v6
         with:
