@@ -116,6 +116,8 @@ class ProductController {
       res.status(500).json({ message: "Server error" });
     }
   }
+
+  // Lấy sản phẩm theo id
 }
 
 module.exports = ProductController;
