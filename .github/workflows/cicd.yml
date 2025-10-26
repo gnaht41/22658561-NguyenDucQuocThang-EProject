@@ -142,3 +142,17 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/eproject-gateway:latest,${{ secrets.DOCKERHUB_USERNAME }}/eproject-gateway:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          
+  deploy:
+    name: Deploy on Localhost (Docker Desktop)
+    needs: build-and-push
+    runs-on: self-hosted
+
+    steps:
+      - name: Deploy with Docker Compose
+        run: |
+          cd "D:\lap_trinh_huong_dich_vu\EProject"
+          docker-compose down --remove-orphans
+          docker-compose pull
+          docker-compose up -d
+          docker ps

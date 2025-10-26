@@ -1,6 +1,6 @@
 services:
   mongo:
-    image: mongo:6
+    image: mongo:latest
     ports:
       - "27017:27017"
     volumes:
@@ -21,6 +21,7 @@ services:
 
   auth:
     build: ./auth
+    image: gnaht41/eproject-auth:latest
     env_file:
       - ./auth/.env
     depends_on:
@@ -30,6 +31,7 @@ services:
 
   product:
     build: ./product
+    image: gnaht41/eproject-product:latest
     env_file:
       - ./product/.env
     depends_on:
@@ -42,6 +44,7 @@ services:
 
   order:
     build: ./order
+    image: gnaht41/eproject-order:latest
     env_file:
       - ./order/.env
     depends_on:
@@ -54,6 +57,7 @@ services:
 
   gateway:
     build: ./api-gateway
+    image: gnaht41/eproject-gateway:latest
     depends_on:
       - auth
       - product
