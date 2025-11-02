@@ -3,7 +3,7 @@ name: CI/CD Pipeline
 on: [push, pull_request]
 
 jobs:
-  Test:
+  test:
     runs-on: ubuntu-latest
 
     services:
@@ -78,7 +78,7 @@ jobs:
         if: always()
         run: pkill -f "node" || true
 
-  Build and push:
+  build-and-push:
     needs: test
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -144,7 +144,7 @@ jobs:
           cache-to: type=gha,mode=max
           
   deploy:
-    name: Deploy on Localhost (Docker Desktop)
+    name: deploy-on-localhost
     needs: build-and-push
     runs-on: self-hosted
 
