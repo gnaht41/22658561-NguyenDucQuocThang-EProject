@@ -78,7 +78,7 @@ jobs:
         if: always()
         run: pkill -f "node" || true
 
-  build-and-push:
+  Build and push:
     needs: test
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
